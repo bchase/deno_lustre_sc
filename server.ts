@@ -5,7 +5,7 @@ import * as GleamApp from './build/dev/javascript/delete_deno_lustre_sc/delete_d
 // TODO
 const port = 8280;
 
-let socket;
+global.sockets = {};
 
 Deno.serve({port}, async (req: Request) => {
   const url = new URL(req.url);
@@ -23,7 +23,7 @@ Deno.serve({port}, async (req: Request) => {
     return renderFile('./priv/index.html', 'text/html');
   }
 
-  return new Response("404 Not Found");
+  return new Response("404 Not Found", { status: 404 });
 });
 
 async function renderFile(rel_path, content_type) {
@@ -45,20 +45,22 @@ function connectLustreServerComponentToWebSocket(req, url) {
 
   const { socket: ws, response } = Deno.upgradeWebSocket(req);
 
-  ws.addEventListener("open", () => {
-    // TODO
-    const id = "TODO";
+  const id = mkId();
 
-    socket = GleamApp.init_socket(id, timezone, (msg) => ws.send(msg));
+  let deregister;
+
+  ws.addEventListener("open", () => {
+    const [socket, dereg_func] = GleamApp.init_socket(id, timezone, (msg) => ws.send(msg));
+    deregister = dereg_func;
+    sockets[id] = socket;
   });
 
   ws.addEventListener("message", (event) => {
-    socket = GleamApp.handle_websocket_message(socket, event.data);
+    sockets[id] = GleamApp.handle_websocket_message(sockets[id], event.data);
   });
 
   ws.addEventListener("close", () => {
-    // TODO
-    console.log("A client disconnected!");
+    deregister();
   });
 
   ws.addEventListener("error", (event) => {
@@ -67,4 +69,8 @@ function connectLustreServerComponentToWebSocket(req, url) {
   });
 
   return response;
+}
+
+function mkId() {
+  return btoa(Date.now().toString() + performance.now().toString().replace('.', ''));
 }

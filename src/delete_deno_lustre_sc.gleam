@@ -9,6 +9,8 @@ import lustre/component
 import lustre/effect.{type Effect}
 import lustre/element.{type Element}
 
+// LUSTRE SERVER COMPONENT INIT/HANDLER
+
 pub type Socket {
   Socket(
     id: String,
@@ -20,15 +22,34 @@ pub fn init_socket(
   id: String,
   timezone: String,
   send_to_client: fn(String) -> Nil,
-) -> Socket {
+) -> #(Socket, fn() -> Nil) {
   let assert Ok(runtime) =
     component()
     |> lustre.start_server_component(with: Flags(
       timezone:,
     ))
 
-  Socket(id:, runtime:)
-  |> register_callback(send_to_client)
+  let callback =
+    fn(msg) {
+      msg
+      |> server_component.client_message_to_json
+      |> json.to_string
+      |> send_to_client
+    }
+
+  let socket = Socket(id:, runtime:)
+
+  let message = server_component.register_callback(callback)
+
+  lustre.send(message:, to: socket.runtime)
+
+  let deregister =
+    fn() {
+      let _deregistered = server_component.deregister_callback(callback)
+      Nil
+    }
+
+  #(socket, deregister)
 }
 
 pub fn handle_websocket_message(
@@ -47,24 +68,7 @@ pub fn handle_websocket_message(
   }
 }
 
-fn register_callback(
-  socket socket: Socket,
-  send_to_client send: fn(String) -> Nil,
-) -> Socket {
-  let message =
-    server_component.register_callback(fn(msg) {
-      msg
-      |> server_component.client_message_to_json
-      |> json.to_string
-      |> send
-    })
-
-  // server_component.deregister_callback(server_component_callback(socket.id, _))
-
-  lustre.send(message:, to: socket.runtime)
-
-  socket
-}
+// LUSTRE APP
 
 fn component() -> lustre.App(Flags, Model, Msg) {
   lustre.component(init, update, view, [
