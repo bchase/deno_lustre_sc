@@ -1,3 +1,4 @@
+import gleam/dynamic/decode
 import lustre/event
 import gleam/int
 import gleam/json
@@ -8,6 +9,7 @@ import lustre
 import lustre/component
 import lustre/effect.{type Effect}
 import lustre/element.{type Element}
+import sqlight
 
 // LUSTRE SERVER COMPONENT INIT/HANDLER
 
@@ -86,15 +88,41 @@ pub type Model {
   Model(
     timezone: String,
     count: Int,
+    conn: sqlight.Connection,
   )
 }
 
 fn init(
   flags flags: Flags,
 ) -> #(Model, Effect(Msg)) {
+  // let db_path = "file:/home/bosco/dev/gleam/delete_deno_lustre_sc/db.sqlite3"
+  let db_path = "file:db.sqlite3?mode=rw"
+  let assert Ok(conn) = sqlight.open(db_path)
+
+  let sql = "
+    INSERT INTO users
+      ( name )
+    VALUES
+      ( 'Foo' ),
+      ( 'Bar' );
+  "
+  let assert Ok(Nil) = sqlight.exec(sql, conn)
+  echo "INSERTED"
+
+  let user_decoder = {
+    use name <- decode.field(0, decode.string)
+    decode.success(name)
+  }
+
+  let _ =
+    "SELECT * FROM users WHERE name = ?;"
+    |> sqlight.query(on: conn, with: [sqlight.text("Foo")], expecting: user_decoder)
+    |> echo
+
   Model(
     timezone: flags.timezone,
     count: 0,
+    conn:,
   )
   |> pair.new(effect.batch([
   ]))

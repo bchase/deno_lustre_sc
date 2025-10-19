@@ -5,7 +5,7 @@ import * as GleamApp from './build/dev/javascript/delete_deno_lustre_sc/delete_d
 // TODO
 const port = 8280;
 
-global.sockets = {};
+let sockets = {};
 
 Deno.serve({port}, async (req: Request) => {
   const url = new URL(req.url);
