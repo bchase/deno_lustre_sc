@@ -1,6 +1,6 @@
 // $ gleam build && deno run --allow-net --allow-read ./server.ts
 
-import * as GleamApp from './build/dev/javascript/delete_deno_lustre_sc/delete_deno_lustre_sc.mjs'
+import * as GleamApp from './build/dev/javascript/deno_lustre_sc/deno_lustre_sc.mjs'
 
 // TODO
 const port = 8280;
