@@ -13,9 +13,8 @@ lustre = { git = "https://github.com/bchase/lustre", ref = "electron-server-comp
 gleam_javascript = ">= 1.0.0 and < 2.0.0"
 wisp = ">= 2.1.0 and < 3.0.0"
 gleam_json = ">= 3.0.2 and < 4.0.0"
-# sqlight = ">= 1.0.2 and < 2.0.0"
-sqlight = { path = "../sqlight" }
 parrot = ">= 2.1.2 and < 3.0.0"
+sqlight = { path = "../sqlight" }
 
 [dev-dependencies]
 gleeunit = ">= 1.0.0 and < 2.0.0"
