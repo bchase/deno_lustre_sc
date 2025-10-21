@@ -1,3 +1,5 @@
+import gleam/result
+import gleam/list
 import gleam/dynamic/decode
 import lustre/event
 import gleam/int
@@ -10,6 +12,11 @@ import lustre/component
 import lustre/effect.{type Effect}
 import lustre/element.{type Element}
 import sqlight
+import parrot/dev as parrot
+import deno_lustre_sc/sql
+import deno_lustre_sc/monad
+import deno_lustre_sc/db
+import deno_lustre_sc/lustre/mvu
 
 // LUSTRE SERVER COMPONENT INIT/HANDLER
 
@@ -73,6 +80,18 @@ pub fn handle_websocket_message(
 // LUSTRE APP
 
 fn component() -> lustre.App(Flags, Model, Msg) {
+  let init = mvu.make_init(
+    init:,
+    to_ctx:,
+    to_err_msg: GotErr(err: _),
+  )
+
+  let update = mvu.make_update(
+    update:,
+    to_ctx:,
+    to_err_msg: GotErr(err: _),
+  )
+
   lustre.component(init, update, view, [
     component.open_shadow_root(True),
   ])
@@ -89,43 +108,51 @@ pub type Model {
     timezone: String,
     count: Int,
     conn: sqlight.Connection,
+    users: List(sql.ListAllUsers),
   )
+}
+
+fn to_ctx(
+  model model: Model,
+) -> monad.Context {
+  let Model(conn:, ..) = model
+
+  monad.Context(
+    nil: Nil,
+    conn:,
+  )
+}
+
+fn fetch_users(
+  model model: Model,
+) -> Update {
+  use users <- monad.do(
+    db.many(sql.list_all_users(name: "Foo"))
+  )
+  mvu.pure(Model(..model, users:))
 }
 
 fn init(
   flags flags: Flags,
-) -> #(Model, Effect(Msg)) {
-  // let db_path = "file:/home/bosco/dev/gleam/deno_lustre_sc/db.sqlite3"
-  let db_path = "file:db.sqlite3?mode=rw"
+) -> #(Model, Update) {
+  let db_path = "db.sqlite3"
   let assert Ok(conn) = sqlight.open(db_path)
 
-  let sql = "
-    INSERT INTO users
-      ( name )
-    VALUES
-      ( 'Foo' ),
-      ( 'Bar' );
-  "
-  let assert Ok(Nil) = sqlight.exec(sql, conn)
-  echo "INSERTED"
+  let model =
+    Model(
+      timezone: flags.timezone,
+      count: 0,
+      conn:,
+      users: [],
+    )
 
-  let user_decoder = {
-    use name <- decode.field(0, decode.string)
-    decode.success(name)
-  }
+  let update =
+    {
+      use model <- mvu.do(fetch_users(model:))
+      mvu.pure(model)
+    }
 
-  let _ =
-    "SELECT * FROM users WHERE name = ?;"
-    |> sqlight.query(on: conn, with: [sqlight.text("Foo")], expecting: user_decoder)
-    |> echo
-
-  Model(
-    timezone: flags.timezone,
-    count: 0,
-    conn:,
-  )
-  |> pair.new(effect.batch([
-  ]))
+  #(model, update)
 }
 
 pub type View {
@@ -137,17 +164,29 @@ pub type View {
 
 pub type Msg {
   NoOp
+  GotErr(err: monad.Err)
   Inc
 }
 
-fn update(model: Model, msg: Msg) -> #(Model, effect.Effect(Msg)) {
+type Update =
+  mvu.Update(Model, Msg)
+
+fn update(model: Model, msg: Msg) -> Update {
   case msg {
     NoOp -> {
-      #(model, effect.none())
+      model
+      |> mvu.pure
+    }
+
+    GotErr(err:) -> {
+      // TODO
+      model
+      |> mvu.pure
     }
 
     Inc -> {
-      #(Model(..model, count: model.count + 1), effect.none())
+      Model(..model, count: model.count + 1)
+      |> mvu.pure
     }
   }
 }
@@ -158,5 +197,11 @@ fn view(model: Model) -> Element(Msg) {
     html.p([], [html.text(model.timezone)]),
     html.p([], [html.text(model.count |> int.to_string)]),
     html.button([event.on_click(Inc)], [html.text("+")]),
+    html.ul([], [
+      html.text(""),
+      ..list.map(model.users, fn(user) {
+        html.li([], [html.text(user.name)])
+      })
+    ]),
   ])
 }
